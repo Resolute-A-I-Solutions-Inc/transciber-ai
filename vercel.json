@@ -1,0 +1,27 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "env": {
+    "FASTAPI_URL": "@fastapi-url"
+  },
+  "rewrites": [
+    {
+      "source": "/api/transcribe",
+      "destination": "/api/transcribe"
+    },
+    {
+      "source": "/api/transcribe/:path*",
+      "destination": "/api/transcribe/:path*"
+    },
+    {
+      "source": "/api/jobs/:path*",
+      "destination": "/api/jobs/:path*"
+    },
+    {
+      "source": "/api/media/:path*",
+      "destination": "/api/media/:path*"
+    }
+  ]
+}
