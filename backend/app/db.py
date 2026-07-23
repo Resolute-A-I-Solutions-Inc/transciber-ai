@@ -22,8 +22,14 @@ def _pool_():
     global _pool
     if _pool is None:
         from psycopg_pool import ConnectionPool
-        _pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=4, open=True,
-                               kwargs={"autocommit": True})
+        _pool = ConnectionPool(
+            DATABASE_URL,
+            min_size=1,
+            max_size=4,
+            open=True,
+            timeout=5,
+            kwargs={"autocommit": True, "connect_timeout": 5},
+        )
     return _pool
 
 

@@ -11,11 +11,12 @@ Only the temporary 16 kHz WAV is deleted after transcription.
 from __future__ import annotations
 
 import mimetypes
+import queue
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from . import db
 from .config import UPLOAD_DIR
@@ -26,6 +27,31 @@ from .transcribe import transcribe as run_transcribe
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="transcribe")
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
+_persist_queue: queue.Queue[tuple[Callable[..., object], tuple[object, ...]]] = queue.Queue()
+
+
+def _persistence_worker() -> None:
+    """Run optional database writes in order without blocking jobs or requests."""
+    while True:
+        func, args = _persist_queue.get()
+        try:
+            func(*args)
+        except Exception:  # noqa: BLE001 - persistence is best-effort
+            pass
+        finally:
+            _persist_queue.task_done()
+
+
+threading.Thread(
+    target=_persistence_worker,
+    name="transcriber-persistence",
+    daemon=True,
+).start()
+
+
+def _persist(func: Callable[..., object], *args: object) -> None:
+    if db.enabled():
+        _persist_queue.put((func, args))
 
 
 def _set(job_id: str, **fields) -> None:
@@ -75,11 +101,8 @@ def submit(source: dict, engine: str, language: str) -> str:
             "result": None, "error": None,
             "media_path": media_basename, "content_type": content_type,
         }
-    try:
-        db.insert_pending(job_id, source["type"], source.get("name", ""), source_url,
-                          engine, language, media_basename, content_type)
-    except Exception:  # noqa: BLE001 - persistence must never block a job
-        pass
+    _persist(db.insert_pending, job_id, source["type"], source.get("name", ""),
+             source_url, engine, language, media_basename, content_type)
     _executor.submit(_run, job_id, source, engine, language)
     return job_id
 
@@ -107,12 +130,9 @@ def retry(job_id: str) -> bool:
             "media_path": info.get("media_path") or "",
             "content_type": info.get("content_type") or "",
         }
-    try:
-        db.insert_pending(job_id, source["type"], source.get("name", ""),
-                          info.get("source_url") or "", engine, language,
-                          info.get("media_path") or "", info.get("content_type") or "")
-    except Exception:  # noqa: BLE001
-        pass
+    _persist(db.insert_pending, job_id, source["type"], source.get("name", ""),
+             info.get("source_url") or "", engine, language,
+             info.get("media_path") or "", info.get("content_type") or "")
     _executor.submit(_run, job_id, source, engine, language)
     return True
 
@@ -141,10 +161,7 @@ def _run(job_id: str, source: dict, engine: str, language: str) -> None:
         # Record retained media so it can be played back / served / managed.
         content_type = _guess_content_type(media, source.get("content_type", ""))
         _set(job_id, media_path=media.name, content_type=content_type)
-        try:
-            db.set_media(job_id, media.name, content_type)
-        except Exception:  # noqa: BLE001
-            pass
+        _persist(db.set_media, job_id, media.name, content_type)
 
         _set(job_id, status="converting", phase="Converting audio", progress=None)
         wav = to_wav16k(media)
@@ -160,15 +177,9 @@ def _run(job_id: str, source: dict, engine: str, language: str) -> None:
         result["vtt"] = to_vtt(result["segments"])
 
         _set(job_id, status="done", phase="Done", progress=1.0, result=result)
-        try:
-            db.mark_done(job_id, result, duration)
-        except Exception:  # noqa: BLE001
-            pass
+        _persist(db.mark_done, job_id, result, duration)
     except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
         _set(job_id, status="error", phase="Error", progress=None, error=str(exc))
-        try:
-            db.mark_error(job_id, str(exc))
-        except Exception:  # noqa: BLE001
-            pass
+        _persist(db.mark_error, job_id, str(exc))
     finally:
         _cleanup(wav)  # keep the source media; only the temp WAV is removed
