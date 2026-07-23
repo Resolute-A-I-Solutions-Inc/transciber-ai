@@ -7,16 +7,67 @@ from __future__ import annotations
 import functools
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from .config import GEMINI_API_KEY, GEMINI_MODEL, WHISPER_MODEL
+from . import config
+from .config import (
+    GEMINI_API_KEY, GEMINI_MODEL, WHISPER_BEAM_SIZE, WHISPER_COMPUTE,
+    WHISPER_CPU_THREADS, WHISPER_DEVICE, WHISPER_IMPL, WHISPER_MODEL, WHISPER_VAD,
+)
 from .languages import LANGUAGES, normalize_language
+
+ProgressCb = Optional[Callable[[float], None]]
 
 
 @functools.lru_cache(maxsize=4)
 def _load_whisper(name: str):
     import whisper
     return whisper.load_model(name)
+
+
+def _resolve_device_compute() -> tuple[str, str]:
+    """Pick device + compute type: CUDA/float16 when available, else CPU/int8."""
+    device = WHISPER_DEVICE
+    if device == "auto":
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:  # noqa: BLE001
+            device = "cpu"
+    compute = WHISPER_COMPUTE or ("float16" if device == "cuda" else "int8")
+    return device, compute
+
+
+@functools.lru_cache(maxsize=4)
+def _load_faster(name: str, device: str, compute: str, threads: int):
+    from faster_whisper import WhisperModel
+    return WhisperModel(name, device=device, compute_type=compute, cpu_threads=threads)
+
+
+def faster_whisper_transcribe(media_path: str | Path, language: Optional[str] = None,
+                              progress_cb: ProgressCb = None,
+                              duration: Optional[float] = None) -> dict:
+    """Transcribe with faster-whisper (CTranslate2): int8/CPU or fp16/CUDA, VAD, streaming.
+
+    Segments stream as they decode, so we can report real progress (end / duration).
+    """
+    device, compute = _resolve_device_compute()
+    model = _load_faster(WHISPER_MODEL, device, compute, WHISPER_CPU_THREADS)
+    lang = normalize_language(language)  # None => auto-detect
+
+    seg_iter, info = model.transcribe(
+        str(media_path), language=lang, beam_size=WHISPER_BEAM_SIZE, vad_filter=WHISPER_VAD,
+    )
+    total = duration or getattr(info, "duration", 0.0) or 0.0
+
+    segments = []
+    for s in seg_iter:  # generator — decoding happens as we iterate
+        segments.append({"start": float(s.start), "end": float(s.end), "text": s.text.strip()})
+        if progress_cb and total:
+            progress_cb(min(0.99, s.end / total))
+
+    full_text = " ".join(x["text"] for x in segments).strip()
+    return _pack(segments, full_text, getattr(info, "language", "") or "")
 
 
 def _pack(segments: list[dict], full_text: str, language: str) -> dict:
@@ -98,8 +149,15 @@ def gemini_transcribe(media_path: str | Path, language: Optional[str] = None) ->
     return _pack(segments, full_text, data.get("language", ""))
 
 
-def transcribe(engine: str, media_path: str | Path, language: Optional[str] = None) -> dict:
-    """Dispatch to the requested engine (``whisper`` or ``gemini``)."""
+def transcribe(engine: str, media_path: str | Path, language: Optional[str] = None,
+               progress_cb: ProgressCb = None, duration: Optional[float] = None) -> dict:
+    """Dispatch to the requested engine.
+
+    ``gemini`` -> cloud. ``whisper`` -> faster-whisper (default) or openai-whisper,
+    controlled by ``WHISPER_IMPL``. Only faster-whisper reports streaming progress.
+    """
     if engine == "gemini":
         return gemini_transcribe(media_path, language)
-    return whisper_transcribe(media_path, language)
+    if config.WHISPER_IMPL == "openai":
+        return whisper_transcribe(media_path, language)
+    return faster_whisper_transcribe(media_path, language, progress_cb, duration)

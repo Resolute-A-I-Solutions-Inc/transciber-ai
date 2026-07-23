@@ -79,7 +79,13 @@ Open **http://localhost:8000**.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `TRANSCRIBE_ENGINE` | `whisper` | Default engine (`whisper` or `gemini`); switchable in the UI. |
-| `WHISPER_MODEL` | `small` | `tiny` \| `base` \| `small` \| `medium` \| `large`. Bigger = more accurate but slower. |
+| `WHISPER_MODEL` | `small` | `tiny` \| `base` \| `small` \| `medium` \| `large-v3`. Bigger = more accurate but slower. |
+| `WHISPER_IMPL` | `faster` | `faster` (faster-whisper/CTranslate2, ~4× faster on CPU) or `openai` (original). |
+| `WHISPER_DEVICE` | `auto` | `auto` uses CUDA if available, else CPU. Force with `cpu`/`cuda`. |
+| `WHISPER_COMPUTE` | *(auto)* | Empty = `int8` on CPU / `float16` on CUDA. Or `int8_float16`, `float16`, `float32`. |
+| `WHISPER_CPU_THREADS` | `0` | CTranslate2 CPU threads (0 = all cores). |
+| `WHISPER_BEAM_SIZE` | `5` | `1` = greedy (fastest), `5` = best accuracy. |
+| `WHISPER_VAD` | `true` | Skip silence via voice-activity detection (big win on long audio). |
 | `GEMINI_API_KEY` | *(empty)* | Required only for the Gemini engine. Get one at https://aistudio.google.com/apikey. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model id. |
 | `MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Max upload / download size. |
@@ -121,6 +127,28 @@ cd backend
 Covers subtitle formatting, Whisper language codes, and the ffmpeg media pipeline.
 
 ---
+
+## Making transcription faster (large files)
+
+The default local engine is **faster-whisper** (CTranslate2) — roughly **4× faster on
+CPU** than the original openai-whisper at the same accuracy, with lower memory. Levers,
+by impact:
+
+1. **Keep `WHISPER_IMPL=faster`** (default) with **int8** compute — the big CPU win.
+2. **`WHISPER_VAD=true`** (default) — skips silence; large real-world files (meetings,
+   podcasts) speed up a lot.
+3. **All cores** — `WHISPER_CPU_THREADS=0` (default) uses every physical core.
+4. **Smaller model / greedy decode** — `WHISPER_MODEL=base` and/or `WHISPER_BEAM_SIZE=1`
+   trade a little accuracy for more speed.
+5. **GPU** — if you have an NVIDIA GPU, install a CUDA build of PyTorch/CTranslate2;
+   `WHISPER_DEVICE=auto` then runs on CUDA (fp16) for a 10–30× speedup.
+
+The transcribe step reports **real streaming progress** with faster-whisper (segments
+decode incrementally), so the progress bar advances on long files instead of sitting idle.
+
+> **Supabase / hosted Postgres:** persistence works with any PostgreSQL. Point
+> `DATABASE_URL` at your Supabase connection string (append `?sslmode=require`), e.g.
+> `postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres?sslmode=require`.
 
 ## Supported input
 

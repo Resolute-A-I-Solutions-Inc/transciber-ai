@@ -39,8 +39,23 @@ def _int_env(name: str, default: int) -> int:
 
 
 # --- Transcription engine ---------------------------------------------------
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")  # tiny|base|small|medium|large
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")  # tiny|base|small|medium|large-v3
 TRANSCRIBE_ENGINE = os.environ.get("TRANSCRIBE_ENGINE", "whisper").lower()  # whisper|gemini
+
+# Local Whisper implementation:
+#   faster = faster-whisper / CTranslate2 (~4x faster on CPU, int8, VAD)  [default]
+#   openai = original openai-whisper (slower fp32 on CPU)
+WHISPER_IMPL = os.environ.get("WHISPER_IMPL", "faster").lower()
+# Device: auto (use CUDA if available, else CPU), or force cpu/cuda.
+WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "auto").lower()
+# Compute type (empty => int8 on CPU, float16 on CUDA). e.g. int8, int8_float16, float16, float32
+WHISPER_COMPUTE = os.environ.get("WHISPER_COMPUTE", "")
+# CPU threads for CTranslate2 (0 => all physical cores).
+WHISPER_CPU_THREADS = _int_env("WHISPER_CPU_THREADS", 0)
+# Decoding beam size (1 = greedy, fastest; 5 = default accuracy).
+WHISPER_BEAM_SIZE = int(os.environ.get("WHISPER_BEAM_SIZE", "5"))
+# Skip silence with voice-activity detection (big win on long, gappy audio).
+WHISPER_VAD = os.environ.get("WHISPER_VAD", "true").lower() not in ("0", "false", "no")
 
 # --- Gemini (optional secondary engine) -------------------------------------
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")

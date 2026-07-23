@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import db
-from .media import download_url, to_wav16k
+from .media import download_url, probe_duration, to_wav16k
 from .subtitles import to_srt, to_vtt
 from .transcribe import transcribe as run_transcribe
 
@@ -107,7 +107,12 @@ def _run(job_id: str, source: dict, engine: str, language: str) -> None:
         wav = to_wav16k(media)
 
         _set(job_id, status="transcribing", phase="Transcribing", progress=None)
-        result = run_transcribe(engine, wav, language)
+        duration = probe_duration(wav)
+        result = run_transcribe(
+            engine, wav, language,
+            progress_cb=lambda frac: _set(job_id, progress=round(frac, 3)),
+            duration=duration,
+        )
         result["srt"] = to_srt(result["segments"])
         result["vtt"] = to_vtt(result["segments"])
 
