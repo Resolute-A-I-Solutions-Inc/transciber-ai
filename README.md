@@ -83,6 +83,7 @@ Open **http://localhost:8000**.
 | `GEMINI_API_KEY` | *(empty)* | Required only for the Gemini engine. Get one at https://aistudio.google.com/apikey. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model id. |
 | `MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Max upload / download size. |
+| `DATABASE_URL` | *(empty)* | Optional PostgreSQL DSN. When set, transcripts are saved and shown as history; the `transcriptions` table is auto-created on startup. When empty, jobs are in-memory only. |
 
 > **Privacy:** With **Whisper**, audio never leaves your machine. With **Gemini**,
 > audio is uploaded to Google for transcription.

@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
+from . import db
 from .media import download_url, to_wav16k
 from .subtitles import to_srt, to_vtt
 from .transcribe import transcribe as run_transcribe
@@ -30,7 +31,24 @@ def _set(job_id: str, **fields) -> None:
 def get_job(job_id: str) -> Optional[dict]:
     with _lock:
         job = _jobs.get(job_id)
-        return dict(job) if job else None
+        if job:
+            return dict(job)
+    # Not in memory — fall back to persisted history (survives restarts).
+    row = db.get_one(job_id)
+    if row is None:
+        return None
+    if row.get("status") == "done":
+        result = {
+            "segments": row.get("segments") or [],
+            "full_text": row.get("full_text") or "",
+            "language_detected": row.get("language_detected") or "",
+            "srt": row.get("srt") or "",
+            "vtt": row.get("vtt") or "",
+        }
+        return {"id": job_id, "status": "done", "phase": "Done",
+                "progress": 1.0, "result": result, "error": None}
+    return {"id": job_id, "status": "error", "phase": "Error",
+            "progress": None, "result": None, "error": row.get("error")}
 
 
 def submit(source: dict, engine: str, language: str) -> str:
@@ -52,6 +70,22 @@ def _cleanup(*paths: Optional[Path]) -> None:
                 Path(p).unlink()
         except OSError:
             pass
+
+
+def _persist_result(job_id, source, engine, language, result) -> None:
+    try:
+        db.save_result(job_id, source.get("type", ""), source.get("name", ""),
+                       engine, language, result)
+    except Exception:  # noqa: BLE001 - persistence must never break a job
+        pass
+
+
+def _persist_error(job_id, source, engine, language, error) -> None:
+    try:
+        db.save_error(job_id, source.get("type", ""), source.get("name", ""),
+                      engine, language, error)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _run(job_id: str, source: dict, engine: str, language: str) -> None:
@@ -78,8 +112,10 @@ def _run(job_id: str, source: dict, engine: str, language: str) -> None:
         result["vtt"] = to_vtt(result["segments"])
 
         _set(job_id, status="done", phase="Done", progress=1.0, result=result)
+        _persist_result(job_id, source, engine, language, result)
     except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
         _set(job_id, status="error", phase="Error", progress=None, error=str(exc))
+        _persist_error(job_id, source, engine, language, str(exc))
     finally:
         # Remove the working WAV always; remove source media if we downloaded it
         # or it was an uploaded temp file.

@@ -76,3 +76,33 @@ export async function getJob(id: string): Promise<Job> {
   if (!res.ok) throw new Error(await detail(res))
   return res.json()
 }
+
+export interface TranscriptionSummary {
+  id: string
+  created_at: string
+  source_type: string
+  source_name: string
+  engine: string
+  status: string
+  language_detected: string
+  preview: string
+}
+
+export async function listTranscriptions(): Promise<TranscriptionSummary[]> {
+  const res = await fetch(`${API}/transcriptions`)
+  if (!res.ok) throw new Error(await detail(res))
+  return res.json()
+}
+
+export async function getTranscription(id: string): Promise<TranscriptResult> {
+  const res = await fetch(`${API}/transcriptions/${id}`)
+  if (!res.ok) throw new Error(await detail(res))
+  const r = await res.json()
+  return {
+    segments: r.segments || [],
+    full_text: r.full_text || '',
+    language_detected: r.language_detected || '',
+    srt: r.srt || '',
+    vtt: r.vtt || '',
+  }
+}

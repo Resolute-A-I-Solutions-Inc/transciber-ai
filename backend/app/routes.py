@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from . import jobs
+from . import db, jobs
 from .config import MAX_UPLOAD_BYTES, UPLOAD_CHUNK_BYTES, UPLOAD_DIR
 from .languages import language_options
 
@@ -51,9 +51,9 @@ async def create_transcription(
         except HTTPException:
             dest.unlink(missing_ok=True)
             raise
-        source = {"type": "file", "path": str(dest)}
+        source = {"type": "file", "path": str(dest), "name": safe_name}
     else:
-        source = {"type": "url", "url": url}
+        source = {"type": "url", "url": url, "name": url}
 
     job_id = jobs.submit(source, engine.lower(), language)
     return {"job_id": job_id}
@@ -65,3 +65,17 @@ def get_job_status(job_id: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
     return job
+
+
+@router.get("/transcriptions")
+def list_transcriptions() -> list[dict]:
+    """Recent saved transcriptions (empty list if no database configured)."""
+    return db.list_recent()
+
+
+@router.get("/transcriptions/{job_id}")
+def get_transcription(job_id: str) -> dict:
+    row = db.get_one(job_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Transcription not found.")
+    return row

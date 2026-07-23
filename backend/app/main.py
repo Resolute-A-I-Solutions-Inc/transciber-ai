@@ -10,10 +10,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import db
 from .config import DEV_ORIGINS, REPO_DIR
 from .routes import router
 
 app = FastAPI(title="transcriber-ai")
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    # Create the transcriptions table if a database is configured (no-op otherwise).
+    try:
+        db.init_db()
+    except Exception as exc:  # noqa: BLE001 - don't block startup on DB issues
+        print(f"[transcriber-ai] DB init skipped: {exc}")
 
 app.add_middleware(
     CORSMiddleware,

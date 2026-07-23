@@ -46,6 +46,12 @@ TRANSCRIBE_ENGINE = os.environ.get("TRANSCRIBE_ENGINE", "whisper").lower()  # wh
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
+# --- Persistence (optional PostgreSQL) --------------------------------------
+# When set, transcription results are saved to PostgreSQL and exposed as history.
+# Example: postgresql://user:pass@127.0.0.1:5432/transcriber_ai
+# When empty, the app runs fine with in-memory jobs only (no history).
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
 # --- Uploads ----------------------------------------------------------------
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", BACKEND_DIR / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

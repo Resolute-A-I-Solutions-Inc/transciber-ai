@@ -4,7 +4,8 @@ import UploadStep, { type UploadPayload } from './components/UploadStep'
 import ProcessingStep from './components/ProcessingStep'
 import ReviewPanel from './components/ReviewPanel'
 import ErrorStep from './components/ErrorStep'
-import { getJob, submitTranscription, type Job } from './api'
+import History from './components/History'
+import { getJob, getTranscription, submitTranscription, type Job } from './api'
 
 type Phase = 'upload' | 'processing' | 'review' | 'error'
 
@@ -13,6 +14,7 @@ export default function App() {
   const [job, setJob] = useState<Job | null>(null)
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
+  const [historyKey, setHistoryKey] = useState(0)
   const pollRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
 
@@ -44,6 +46,7 @@ export default function App() {
           setJob(j)
           if (j.status === 'done') {
             stopTimers()
+            setHistoryKey((k) => k + 1)
             setPhase('review')
           } else if (j.status === 'error') {
             stopTimers()
@@ -58,6 +61,18 @@ export default function App() {
       }, 1000)
     } catch (err) {
       stopTimers()
+      setError(err instanceof Error ? err.message : String(err))
+      setPhase('error')
+    }
+  }
+
+  async function openHistory(id: string) {
+    try {
+      const result = await getTranscription(id)
+      setError('')
+      setJob({ id, status: 'done', phase: 'Done', progress: 1, result, error: null })
+      setPhase('review')
+    } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setPhase('error')
     }
@@ -80,7 +95,12 @@ export default function App() {
       <Stepper active={activeStep} error={phase === 'error'} />
 
       <main className="stage">
-        {phase === 'upload' && <UploadStep onSubmit={start} />}
+        {phase === 'upload' && (
+          <>
+            <UploadStep onSubmit={start} />
+            <History refreshKey={historyKey} onOpen={openHistory} />
+          </>
+        )}
         {phase === 'processing' && <ProcessingStep job={job} elapsed={elapsed} />}
         {phase === 'review' && job?.result && (
           <ReviewPanel result={job.result} onRestart={reset} />
