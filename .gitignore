@@ -1,0 +1,26 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Env / secrets
+.env
+
+# Runtime artifacts
+uploads/
+backend/uploads/
+
+# Whisper model cache (if kept local)
+models/
+
+# Node / Vite
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
