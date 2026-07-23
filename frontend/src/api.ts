@@ -43,7 +43,10 @@ const API = '/api'
 // large uploads bypass Vercel's ~4.5MB proxy body limit. Set
 // NEXT_PUBLIC_FASTAPI_URL to that backend's origin (CORS must allow this site).
 // Empty => same-origin (local dev where the backend is proxied/served locally).
-const BACKEND = (process.env.NEXT_PUBLIC_FASTAPI_URL || '').replace(/\/+$/, '')
+// .trim() strips stray whitespace AND a leading BOM (U+FEFF) that can sneak in
+// when the env var is set via some shells — a BOM makes the URL parse as
+// relative, silently sending uploads to the wrong origin (a 404).
+const BACKEND = (process.env.NEXT_PUBLIC_FASTAPI_URL || '').trim().replace(/\/+$/, '')
 const JOB_API = `${BACKEND}${API}`
 
 async function detail(res: Response): Promise<string> {
