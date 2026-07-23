@@ -1,8 +1,4 @@
-'use client'
-
-import dynamic from 'next/dynamic'
-
-const Admin = dynamic(() => import('@/Admin'), { ssr: false })
+import Admin from '@/Admin'
 
 export default function AdminPage() {
   return <Admin />

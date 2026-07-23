@@ -1,84 +1,18 @@
+'use client'
+
 import { useCallback, useEffect, useState } from 'react'
-import {
-  adminCheck, adminDelete, adminListSubmissions, adminRetry, adminStats,
-  type AdminStats, type Submission,
-} from './api'
+import { adminCheck, adminDelete, adminListSubmissions, adminRetry, adminStats, type AdminStats, type Submission } from './api'
 import { clock } from './format'
+import Brand from './components/Brand'
+import Icon from './components/Icon'
 
 const KEY_STORE = 'transcriber_admin_key'
 
-// SVG Icons
-const Icons = {
-  Refresh: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10" />
-      <polyline points="1 20 1 14 7 14" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-    </svg>
-  ),
-  Logout: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  ),
-  Home: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  ),
-  Open: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
-  ),
-  Retry: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10" />
-      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-    </svg>
-  ),
-  Delete: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  ),
-  Lock: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  ),
-  File: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
-  ),
-  Clock: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  ),
-  Globe: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  ),
-}
-
 export default function Admin() {
-  const [key, setKey] = useState<string>(() => localStorage.getItem(KEY_STORE) || '')
+  const [key, setKey] = useState('')
   const [authed, setAuthed] = useState(false)
   const [keyInput, setKeyInput] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [subs, setSubs] = useState<Submission[]>([])
@@ -90,7 +24,11 @@ export default function Admin() {
     setSubs(list)
   }, [])
 
-  // Try a stored key on first load.
+  useEffect(() => {
+    const storedKey = localStorage.getItem(KEY_STORE)
+    if (storedKey) setKey(storedKey)
+  }, [])
+
   useEffect(() => {
     if (!key) return
     adminCheck(key).then((ok) => {
@@ -103,7 +41,7 @@ export default function Admin() {
     e.preventDefault()
     setError('')
     const ok = await adminCheck(keyInput)
-    if (!ok) { setError('Invalid key, or admin is disabled (ADMIN_KEY not set on the server).'); return }
+    if (!ok) { setError('Invalid key, or admin is disabled because ADMIN_KEY is not set on the server.'); return }
     localStorage.setItem(KEY_STORE, keyInput)
     setKey(keyInput)
     setAuthed(true)
@@ -130,149 +68,85 @@ export default function Admin() {
 
   if (!authed) {
     return (
-      <div className="admin">
-        <div className="card admin__login">
-          <div style={{ textAlign: 'center', marginBottom: 'var(--space-lg)' }}>
-            <div style={{ 
-              width: 64, 
-              height: 64, 
-              borderRadius: '50%', 
-              background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto var(--space-md)',
-              boxShadow: '0 4px 14px rgba(139, 92, 246, 0.35)'
-            }}>
-              <Icons.Lock />
-            </div>
-            <h1 style={{ margin: 0 }}>Admin Sign-in</h1>
-          </div>
-          <p style={{ color: 'var(--muted)', marginBottom: 'var(--space-lg)', textAlign: 'center' }}>
-            Enter the admin key (server env <code style={{ 
-              background: 'var(--card-2)', 
-              padding: '2px 8px', 
-              borderRadius: '4px',
-              fontFamily: 'var(--mono)'
-            }}>ADMIN_KEY</code>).
-          </p>
-          <form onSubmit={login}>
-            <input
-              className="text-input"
-              type="password"
-              placeholder="Enter admin key"
-              value={keyInput}
-              onChange={(e) => setKeyInput(e.target.value)}
-              autoFocus
-            />
-            <button className="btn btn--primary btn--block" style={{ marginTop: 'var(--space-md)' }} type="submit">
-              Sign in
-            </button>
-          </form>
-          {error && <p className="admin__error">{error}</p>}
-          <p style={{ marginTop: 'var(--space-lg)', textAlign: 'center' }}>
-            <a className="navlink" href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icons.Home /> Back to app
-            </a>
-          </p>
-        </div>
+      <div className="login-page">
+        <header className="login-header">
+          <a href="/" className="brand-link" aria-label="Transcriber AI home"><Brand /></a>
+          <a className="back-link" href="/"><Icon name="home" size={17} /> Back to transcriber</a>
+        </header>
+        <main className="login-main">
+          <section className="login-intro" aria-labelledby="login-intro-title">
+            <p className="eyebrow"><Icon name="lock" size={15} /> Secure administration</p>
+            <h1 id="login-intro-title">Manage every transcript from one clear workspace.</h1>
+            <p>Review submission activity, reopen completed transcripts, and resolve failed jobs without leaving the dashboard.</p>
+            <ul className="login-benefits">
+              <li><span><Icon name="check" size={16} /></span><div><strong>See system activity</strong><p>Track completed, pending, and failed submissions at a glance.</p></div></li>
+              <li><span><Icon name="refresh" size={16} /></span><div><strong>Resolve failed jobs</strong><p>Retry a transcription while keeping its source information available.</p></div></li>
+              <li><span><Icon name="lock" size={16} /></span><div><strong>Restricted access</strong><p>The dashboard remains protected by the server-side admin key.</p></div></li>
+            </ul>
+          </section>
+
+          <section className="login-card" aria-labelledby="admin-login-title">
+            <div className="login-card__mark"><Icon name="lock" size={23} /></div>
+            <p className="login-card__kicker">Administrator access</p>
+            <h2 id="admin-login-title">Log in to the dashboard</h2>
+            <p className="login-card__intro">Use the admin key configured on this server to continue.</p>
+            <form onSubmit={login} className="admin-login__form">
+              <label className="field">
+                <span className="field__label">Admin key</span>
+                <span className="password-field">
+                  <Icon name="lock" size={17} />
+                  <input className="text-input" type={showPassword ? 'text' : 'password'} placeholder="Enter your admin key" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} autoComplete="current-password" autoFocus />
+                  <button className="password-toggle" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide admin key' : 'Show admin key'} aria-pressed={showPassword}>
+                    <Icon name={showPassword ? 'eye-off' : 'eye'} size={18} />
+                  </button>
+                </span>
+              </label>
+              <button className="btn btn--primary btn--block" type="submit">Log in <Icon name="open" size={16} /></button>
+            </form>
+            {error && <p className="admin__error" role="alert"><Icon name="error" size={17} />{error}</p>}
+            <p className="login-card__help">The key is set through <code>ADMIN_KEY</code> in the server environment.</p>
+          </section>
+        </main>
+        <footer className="login-footer"><span>Transcriber AI administration</span><span>Protected access</span></footer>
       </div>
     )
   }
+  const statItems = stats ? [
+    { label: 'Total submissions', value: stats.total, tone: 'neutral' },
+    { label: 'Completed', value: stats.done, tone: 'success' },
+    { label: 'Pending', value: stats.pending, tone: 'warning' },
+    { label: 'Failed', value: stats.error, tone: 'danger' },
+  ] : []
 
   return (
-    <div className="admin">
-      <div className="admin__head">
-        <h1>Submissions</h1>
-        <div className="admin__user">
-          <div className="admin__avatar">A</div>
-          <span className="admin__username">Admin</span>
-          <div style={{ display: 'flex', gap: 'var(--space-xs)', marginLeft: 'var(--space-sm)' }}>
-            <a className="btn btn--ghost btn--sm" href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icons.Home /> App
-            </a>
-            <button className="btn btn--ghost btn--sm" onClick={() => refresh(key)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icons.Refresh /> Refresh
-            </button>
-            <button className="btn btn--ghost btn--sm" onClick={logout} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icons.Logout /> Sign out
-            </button>
-          </div>
+    <div className="admin-shell">
+      <header className="admin-topbar">
+        <a href="/" className="brand-link" aria-label="Transcriber AI home"><Brand /></a>
+        <div className="admin-topbar__actions">
+          <span className="admin__identity"><span className="admin__avatar">A</span><span>Admin</span></span>
+          <a className="btn btn--ghost btn--sm" href="/"><Icon name="home" size={16} /> App</a>
+          <button className="btn btn--ghost btn--sm" onClick={() => refresh(key)}><Icon name="refresh" size={16} /> Refresh</button>
+          <button className="btn btn--ghost btn--sm" onClick={logout}><Icon name="sign-out" size={16} /> Sign out</button>
         </div>
-      </div>
+      </header>
 
-      {stats && (
-        <div className="stats">
-          <div className="stat">
-            <div className="stat__num">{stats.total}</div>
-            <div className="stat__label">Total</div>
+      <main className="admin">
+        <div className="admin__head"><div><p className="eyebrow">Operations</p><h1>Submissions</h1><p>Review and manage transcription activity.</p></div></div>
+        {stats && <div className="stats">{statItems.map((item) => <article className={`stat stat--${item.tone}`} key={item.label}><div className="stat__label">{item.label}</div><div className="stat__num">{item.value}</div><span className="stat__indicator" /></article>)}</div>}
+        {error && <p className="admin__error" role="alert"><Icon name="error" size={17} />{error}</p>}
+        <section className="records" aria-labelledby="records-title">
+          <div className="records__head"><div><h2 id="records-title">All submissions</h2><p>{subs.length} {subs.length === 1 ? 'record' : 'records'}</p></div></div>
+          <div className="table-wrap">
+            <table className="subs">
+              <thead><tr><th><span className="th-label"><Icon name="file" size={15} /> Source</span></th><th><span className="th-label"><Icon name="clock" size={15} /> Uploaded</span></th><th>Type</th><th>Duration</th><th>Status</th><th><span className="th-label"><Icon name="globe" size={15} /> Language</span></th><th>Actions</th></tr></thead>
+              <tbody>
+                {subs.length === 0 && <tr><td colSpan={7}><div className="empty-state"><span><Icon name="file" size={22} /></span><strong>No submissions yet</strong><p>New transcription jobs will appear here.</p></div></td></tr>}
+                {subs.map((s) => <tr key={s.id}><td className="name" title={s.source_name || s.source_url}><span className="source-cell"><span className="source-cell__icon"><Icon name="file" size={17} /></span>{s.source_name || s.source_url || s.id}</span></td><td>{new Date(s.created_at).toLocaleString()}</td><td>{s.content_type || (s.source_type === 'url' ? 'URL' : 'â€”')}</td><td>{s.duration ? clock(s.duration) : 'â€”'}</td><td><span className={`badge badge--${s.status}`}><span />{s.status}</span></td><td>{s.language_detected || 'â€”'}</td><td><div className="row-actions">{s.has_transcript && <a className="btn btn--ghost btn--sm btn--icon-text" href={`/?open=${s.id}`}><Icon name="open" size={15} /> Open</a>}{s.status === 'error' && <button className="btn btn--ghost btn--sm btn--icon-text" disabled={busy} onClick={() => onRetry(s.id)}><Icon name="retry" size={15} /> Retry</button>}<button className="btn btn--danger btn--sm btn--icon-text" disabled={busy} onClick={() => onDelete(s.id)}><Icon name="delete" size={15} /> Delete</button></div></td></tr>)}
+              </tbody>
+            </table>
           </div>
-          <div className="stat">
-            <div className="stat__num" style={{ color: '#4ade80' }}>{stats.done}</div>
-            <div className="stat__label">Completed</div>
-          </div>
-          <div className="stat">
-            <div className="stat__num" style={{ color: '#facc15' }}>{stats.pending}</div>
-            <div className="stat__label">Pending</div>
-          </div>
-          <div className="stat">
-            <div className="stat__num" style={{ color: '#f87171' }}>{stats.error}</div>
-            <div className="stat__label">Failed</div>
-          </div>
-        </div>
-      )}
-
-      {error && <p className="admin__error">{error}</p>}
-
-      <div className="table-wrap">
-        <table className="subs">
-          <thead>
-            <tr>
-              <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icons.File /> Source</span></th>
-              <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icons.Clock /> Uploaded</span></th>
-              <th>Type</th>
-              <th>Duration</th>
-              <th>Status</th>
-              <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icons.Globe /> Language</span></th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subs.length === 0 && (
-              <tr><td colSpan={7} style={{ color: 'var(--muted)', textAlign: 'center', padding: 'var(--space-xl)' }}>No submissions yet.</td></tr>
-            )}
-            {subs.map((s) => (
-              <tr key={s.id}>
-                <td className="name" title={s.source_name || s.source_url}>
-                  {s.source_name || s.source_url || s.id}
-                </td>
-                <td>{new Date(s.created_at).toLocaleString()}</td>
-                <td>{s.content_type || (s.source_type === 'url' ? 'url' : '—')}</td>
-                <td>{s.duration ? clock(s.duration) : '—'}</td>
-                <td><span className={`badge badge--${s.status}`}>{s.status}</span></td>
-                <td>{s.language_detected || '—'}</td>
-                <td>
-                  <div className="row-actions">
-                    {s.has_transcript && (
-                      <a className="btn btn--ghost btn--sm" href={`/?open=${s.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Icons.Open /> Open
-                      </a>
-                    )}
-                    {s.status === 'error' && (
-                      <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => onRetry(s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Icons.Retry /> Retry
-                      </button>
-                    )}
-                    <button className="btn btn--danger btn--sm" disabled={busy} onClick={() => onDelete(s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Icons.Delete /> Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        </section>
+      </main>
     </div>
   )
 }
