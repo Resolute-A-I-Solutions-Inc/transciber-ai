@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import db
 from .config import DEV_ORIGINS, REPO_DIR
+from .routes import admin as admin_router
 from .routes import router
 
 app = FastAPI(title="transcriber-ai")
@@ -33,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health")

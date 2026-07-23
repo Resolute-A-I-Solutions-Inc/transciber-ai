@@ -61,6 +61,11 @@ WHISPER_VAD = os.environ.get("WHISPER_VAD", "true").lower() not in ("0", "false"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
+# --- Admin dashboard --------------------------------------------------------
+# Credential required to access the /admin dashboard and admin API.
+# When EMPTY, the admin API is DISABLED (fail-closed) — nothing is exposed.
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+
 # --- Persistence (optional PostgreSQL) --------------------------------------
 # When set, transcription results are saved to PostgreSQL and exposed as history.
 # Example: postgresql://user:pass@127.0.0.1:5432/transcriber_ai

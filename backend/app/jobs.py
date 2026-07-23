@@ -3,9 +3,14 @@
 A transcription job runs on a background thread pool so the HTTP request returns
 immediately with a ``job_id``. The frontend polls ``get_job`` for progress. This
 is what lets a multi-GB / multi-minute transcription run without an HTTP timeout.
+
+Source media is retained on disk (under UPLOAD_DIR) so it can be played back in
+the Review panel, served via /api/media, and managed from the admin dashboard.
+Only the temporary 16 kHz WAV is deleted after transcription.
 """
 from __future__ import annotations
 
+import mimetypes
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import db
+from .config import UPLOAD_DIR
 from .media import download_url, probe_duration, to_wav16k
 from .subtitles import to_srt, to_vtt
 from .transcribe import transcribe as run_transcribe
@@ -28,6 +34,10 @@ def _set(job_id: str, **fields) -> None:
             _jobs[job_id].update(fields)
 
 
+def _guess_content_type(path: Path, fallback: str = "") -> str:
+    return fallback or mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+
+
 def get_job(job_id: str) -> Optional[dict]:
     with _lock:
         job = _jobs.get(job_id)
@@ -37,6 +47,8 @@ def get_job(job_id: str) -> Optional[dict]:
     row = db.get_one(job_id)
     if row is None:
         return None
+    base = {"id": job_id, "content_type": row.get("content_type") or "",
+            "media_path": row.get("media_path") or ""}
     if row.get("status") == "done":
         result = {
             "segments": row.get("segments") or [],
@@ -45,22 +57,64 @@ def get_job(job_id: str) -> Optional[dict]:
             "srt": row.get("srt") or "",
             "vtt": row.get("vtt") or "",
         }
-        return {"id": job_id, "status": "done", "phase": "Done",
-                "progress": 1.0, "result": result, "error": None}
-    return {"id": job_id, "status": "error", "phase": "Error",
+        return {**base, "status": "done", "phase": "Done", "progress": 1.0,
+                "result": result, "error": None}
+    return {**base, "status": row.get("status") or "error", "phase": "Error",
             "progress": None, "result": None, "error": row.get("error")}
 
 
 def submit(source: dict, engine: str, language: str) -> str:
     """Create a job and dispatch it. ``source`` is {"type":"file"|"url", ...}."""
     job_id = uuid.uuid4().hex
+    media_basename = Path(source["path"]).name if source["type"] == "file" else ""
+    content_type = source.get("content_type", "")
+    source_url = source.get("url", "") if source["type"] == "url" else ""
     with _lock:
         _jobs[job_id] = {
-            "id": job_id, "status": "queued", "phase": "Queued",
-            "progress": 0.0, "result": None, "error": None,
+            "id": job_id, "status": "queued", "phase": "Queued", "progress": 0.0,
+            "result": None, "error": None,
+            "media_path": media_basename, "content_type": content_type,
         }
+    try:
+        db.insert_pending(job_id, source["type"], source.get("name", ""), source_url,
+                          engine, language, media_basename, content_type)
+    except Exception:  # noqa: BLE001 - persistence must never block a job
+        pass
     _executor.submit(_run, job_id, source, engine, language)
     return job_id
+
+
+def retry(job_id: str) -> bool:
+    """Re-queue a submission (e.g. a failed one) using its stored media or URL."""
+    info = db.get_retry_info(job_id)
+    if not info:
+        return False
+    engine = info.get("engine") or "whisper"
+    language = info.get("language") or "auto"
+    if info.get("media_path"):
+        source = {"type": "file", "path": str(UPLOAD_DIR / info["media_path"]),
+                  "name": info.get("source_name") or "",
+                  "content_type": info.get("content_type") or ""}
+    elif info.get("source_url"):
+        source = {"type": "url", "url": info["source_url"],
+                  "name": info.get("source_name") or info["source_url"]}
+    else:
+        return False
+    with _lock:
+        _jobs[job_id] = {
+            "id": job_id, "status": "queued", "phase": "Queued", "progress": 0.0,
+            "result": None, "error": None,
+            "media_path": info.get("media_path") or "",
+            "content_type": info.get("content_type") or "",
+        }
+    try:
+        db.insert_pending(job_id, source["type"], source.get("name", ""),
+                          info.get("source_url") or "", engine, language,
+                          info.get("media_path") or "", info.get("content_type") or "")
+    except Exception:  # noqa: BLE001
+        pass
+    _executor.submit(_run, job_id, source, engine, language)
+    return True
 
 
 def _cleanup(*paths: Optional[Path]) -> None:
@@ -72,26 +126,8 @@ def _cleanup(*paths: Optional[Path]) -> None:
             pass
 
 
-def _persist_result(job_id, source, engine, language, result) -> None:
-    try:
-        db.save_result(job_id, source.get("type", ""), source.get("name", ""),
-                       engine, language, result)
-    except Exception:  # noqa: BLE001 - persistence must never break a job
-        pass
-
-
-def _persist_error(job_id, source, engine, language, error) -> None:
-    try:
-        db.save_error(job_id, source.get("type", ""), source.get("name", ""),
-                      engine, language, error)
-    except Exception:  # noqa: BLE001
-        pass
-
-
 def _run(job_id: str, source: dict, engine: str, language: str) -> None:
-    media: Optional[Path] = None
     wav: Optional[Path] = None
-    downloaded = False
     try:
         if source["type"] == "url":
             _set(job_id, status="downloading", phase="Downloading media", progress=0.0)
@@ -99,9 +135,16 @@ def _run(job_id: str, source: dict, engine: str, language: str) -> None:
                 source["url"],
                 progress_cb=lambda f: _set(job_id, progress=round(f, 3)),
             )
-            downloaded = True
         else:
             media = Path(source["path"])
+
+        # Record retained media so it can be played back / served / managed.
+        content_type = _guess_content_type(media, source.get("content_type", ""))
+        _set(job_id, media_path=media.name, content_type=content_type)
+        try:
+            db.set_media(job_id, media.name, content_type)
+        except Exception:  # noqa: BLE001
+            pass
 
         _set(job_id, status="converting", phase="Converting audio", progress=None)
         wav = to_wav16k(media)
@@ -117,13 +160,15 @@ def _run(job_id: str, source: dict, engine: str, language: str) -> None:
         result["vtt"] = to_vtt(result["segments"])
 
         _set(job_id, status="done", phase="Done", progress=1.0, result=result)
-        _persist_result(job_id, source, engine, language, result)
+        try:
+            db.mark_done(job_id, result, duration)
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
         _set(job_id, status="error", phase="Error", progress=None, error=str(exc))
-        _persist_error(job_id, source, engine, language, str(exc))
+        try:
+            db.mark_error(job_id, str(exc))
+        except Exception:  # noqa: BLE001
+            pass
     finally:
-        # Remove the working WAV always; remove source media if we downloaded it
-        # or it was an uploaded temp file.
-        _cleanup(wav)
-        if downloaded or (media and source.get("type") == "file"):
-            _cleanup(media)
+        _cleanup(wav)  # keep the source media; only the temp WAV is removed

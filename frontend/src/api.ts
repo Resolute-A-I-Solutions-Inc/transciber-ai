@@ -27,6 +27,8 @@ export interface Job {
   progress: number | null
   result: TranscriptResult | null
   error: string | null
+  content_type?: string
+  media_path?: string
 }
 
 export interface LanguageOption {
@@ -94,15 +96,89 @@ export async function listTranscriptions(): Promise<TranscriptionSummary[]> {
   return res.json()
 }
 
-export async function getTranscription(id: string): Promise<TranscriptResult> {
+export interface OpenedTranscript {
+  result: TranscriptResult
+  contentType: string
+}
+
+export async function getTranscription(id: string): Promise<OpenedTranscript> {
   const res = await fetch(`${API}/transcriptions/${id}`)
   if (!res.ok) throw new Error(await detail(res))
   const r = await res.json()
   return {
-    segments: r.segments || [],
-    full_text: r.full_text || '',
-    language_detected: r.language_detected || '',
-    srt: r.srt || '',
-    vtt: r.vtt || '',
+    result: {
+      segments: r.segments || [],
+      full_text: r.full_text || '',
+      language_detected: r.language_detected || '',
+      srt: r.srt || '',
+      vtt: r.vtt || '',
+    },
+    contentType: r.content_type || '',
   }
+}
+
+/** URL of the stored media for a submission (streams with range support). */
+export function mediaUrl(id: string): string {
+  return `${API}/media/${id}`
+}
+
+// --- Admin API (all calls require the X-Admin-Key header) -------------------
+export interface Submission {
+  id: string
+  created_at: string
+  source_type: string
+  source_name: string
+  source_url: string
+  engine: string
+  language: string
+  status: string
+  language_detected: string
+  content_type: string
+  duration: number | null
+  has_transcript: boolean
+}
+
+export interface AdminStats {
+  total: number
+  done: number
+  pending: number
+  error: number
+}
+
+function adminHeaders(key: string): HeadersInit {
+  return { 'X-Admin-Key': key }
+}
+
+/** Returns true if the key is valid, false on 401/503. */
+export async function adminCheck(key: string): Promise<boolean> {
+  const res = await fetch(`${API}/admin/check`, { headers: adminHeaders(key) })
+  return res.ok
+}
+
+export async function adminStats(key: string): Promise<AdminStats> {
+  const res = await fetch(`${API}/admin/stats`, { headers: adminHeaders(key) })
+  if (!res.ok) throw new Error(await detail(res))
+  return res.json()
+}
+
+export async function adminListSubmissions(key: string): Promise<Submission[]> {
+  const res = await fetch(`${API}/admin/submissions`, { headers: adminHeaders(key) })
+  if (!res.ok) throw new Error(await detail(res))
+  return res.json()
+}
+
+export async function adminDelete(key: string, id: string): Promise<void> {
+  const res = await fetch(`${API}/admin/submissions/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(key),
+  })
+  if (!res.ok) throw new Error(await detail(res))
+}
+
+export async function adminRetry(key: string, id: string): Promise<void> {
+  const res = await fetch(`${API}/admin/submissions/${id}/retry`, {
+    method: 'POST',
+    headers: adminHeaders(key),
+  })
+  if (!res.ok) throw new Error(await detail(res))
 }

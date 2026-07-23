@@ -1,13 +1,15 @@
-"""REST API: language list, transcription submission, job polling."""
+"""REST API: languages, transcription, job polling, media serving, admin."""
 from __future__ import annotations
 
 import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import (APIRouter, Depends, File, Form, Header, HTTPException,
+                     UploadFile)
+from fastapi.responses import FileResponse
 
-from . import db, jobs
+from . import config, db, jobs
 from .config import MAX_UPLOAD_BYTES, UPLOAD_CHUNK_BYTES, UPLOAD_DIR
 from .languages import language_options
 
@@ -51,7 +53,8 @@ async def create_transcription(
         except HTTPException:
             dest.unlink(missing_ok=True)
             raise
-        source = {"type": "file", "path": str(dest), "name": safe_name}
+        source = {"type": "file", "path": str(dest), "name": safe_name,
+                  "content_type": file.content_type or ""}
     else:
         source = {"type": "url", "url": url, "name": url}
 
@@ -79,3 +82,69 @@ def get_transcription(job_id: str) -> dict:
     if row is None:
         raise HTTPException(status_code=404, detail="Transcription not found.")
     return row
+
+
+# --- Media serving (for the Review-panel player; supports range/seek) --------
+def _resolve_media(job_id: str) -> tuple[Path, str]:
+    job = jobs.get_job(job_id)
+    basename = (job or {}).get("media_path") or ""
+    content_type = (job or {}).get("content_type") or "application/octet-stream"
+    if not basename:
+        raise HTTPException(status_code=404, detail="No media for this submission.")
+    # Guard against path traversal — must be a plain filename inside UPLOAD_DIR.
+    if Path(basename).name != basename:
+        raise HTTPException(status_code=400, detail="Invalid media path.")
+    path = UPLOAD_DIR / basename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Media file not found (may have been deleted).")
+    return path, content_type
+
+
+@router.get("/media/{job_id}")
+def get_media(job_id: str) -> FileResponse:
+    path, content_type = _resolve_media(job_id)
+    # Starlette's FileResponse honours the Range header, so the player can seek.
+    return FileResponse(path, media_type=content_type, filename=path.name)
+
+
+# --- Admin (gated by ADMIN_KEY; fail-closed when unset) ----------------------
+def require_admin(x_admin_key: Optional[str] = Header(None)) -> None:
+    if not config.ADMIN_KEY:
+        raise HTTPException(status_code=503, detail="Admin dashboard is disabled (ADMIN_KEY not set).")
+    if x_admin_key != config.ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing admin key.")
+
+
+admin = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
+
+
+@admin.get("/check")
+def admin_check() -> dict:
+    return {"ok": True}
+
+
+@admin.get("/stats")
+def admin_stats() -> dict:
+    return db.stats()
+
+
+@admin.get("/submissions")
+def admin_list() -> list[dict]:
+    return db.list_all()
+
+
+@admin.delete("/submissions/{job_id}")
+def admin_delete(job_id: str) -> dict:
+    media_basename = db.delete(job_id)
+    if media_basename is None:
+        raise HTTPException(status_code=404, detail="Submission not found.")
+    if media_basename and Path(media_basename).name == media_basename:
+        (UPLOAD_DIR / media_basename).unlink(missing_ok=True)
+    return {"deleted": True}
+
+
+@admin.post("/submissions/{job_id}/retry")
+def admin_retry(job_id: str) -> dict:
+    if not jobs.retry(job_id):
+        raise HTTPException(status_code=404, detail="Nothing to retry (no stored media or URL).")
+    return {"requeued": True}

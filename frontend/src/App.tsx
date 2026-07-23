@@ -68,9 +68,10 @@ export default function App() {
 
   async function openHistory(id: string) {
     try {
-      const result = await getTranscription(id)
+      const { result, contentType } = await getTranscription(id)
       setError('')
-      setJob({ id, status: 'done', phase: 'Done', progress: 1, result, error: null })
+      setJob({ id, status: 'done', phase: 'Done', progress: 1, result, error: null,
+               content_type: contentType })
       setPhase('review')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -79,6 +80,16 @@ export default function App() {
   }
 
   useEffect(() => stopTimers, [])
+
+  // Deep-link from the admin dashboard: /?open=<id> opens that transcript.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('open')
+    if (id) {
+      openHistory(id)
+      window.history.replaceState({}, '', '/')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const activeStep = phase === 'upload' ? 0 : phase === 'review' ? 2 : 1
 
@@ -103,13 +114,20 @@ export default function App() {
         )}
         {phase === 'processing' && <ProcessingStep job={job} elapsed={elapsed} />}
         {phase === 'review' && job?.result && (
-          <ReviewPanel result={job.result} onRestart={reset} />
+          <ReviewPanel
+            mediaId={job.id}
+            contentType={job.content_type || ''}
+            result={job.result}
+            onRestart={reset}
+          />
         )}
         {phase === 'error' && <ErrorStep message={error} onRestart={reset} />}
       </main>
 
       <footer className="foot">
         Local OpenAI Whisper · optional Google Gemini · with Whisper your files never leave this machine.
+        <br />
+        <a className="navlink" href="/admin">Admin dashboard →</a>
       </footer>
     </div>
   )

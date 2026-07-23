@@ -89,7 +89,8 @@ Open **http://localhost:8000**.
 | `GEMINI_API_KEY` | *(empty)* | Required only for the Gemini engine. Get one at https://aistudio.google.com/apikey. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model id. |
 | `MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Max upload / download size. |
-| `DATABASE_URL` | *(empty)* | Optional PostgreSQL DSN. When set, transcripts are saved and shown as history; the `transcriptions` table is auto-created on startup. When empty, jobs are in-memory only. |
+| `DATABASE_URL` | *(empty)* | Optional PostgreSQL DSN. When set, transcripts are saved and shown as history; the `transcriptions` table is auto-created on startup. Also required for the admin dashboard. When empty, jobs are in-memory only. |
+| `ADMIN_KEY` | *(empty)* | Credential for `/admin` and the admin API. **Empty = admin disabled (fail-closed).** |
 
 > **Privacy:** With **Whisper**, audio never leaves your machine. With **Gemini**,
 > audio is uploaded to Google for transcription.
@@ -103,6 +104,11 @@ Open **http://localhost:8000**.
 | `GET /api/languages` | Whisper language options (`{code, name}`), `auto` first. |
 | `POST /api/transcribe` | multipart: `file` **or** `url`, plus `language`, `engine`. Returns `{job_id}`. |
 | `GET /api/jobs/{id}` | Job `status`, `phase`, `progress`, and `result` when done. |
+| `GET /api/media/{id}` | Streams the stored media for playback (supports HTTP range/seek). |
+| `GET /api/transcriptions` | Recent submissions (history). |
+| `GET /api/admin/submissions` · `/stats` | Admin list + aggregate stats. **Requires `X-Admin-Key` header.** |
+| `DELETE /api/admin/submissions/{id}` | Delete a submission + its media file. Gated. |
+| `POST /api/admin/submissions/{id}/retry` | Re-queue a (failed) submission. Gated. |
 
 Result schema:
 
@@ -127,6 +133,25 @@ cd backend
 Covers subtitle formatting, Whisper language codes, and the ffmpeg media pipeline.
 
 ---
+
+## Admin dashboard
+
+Visit **`/admin`** (linked from the footer). It's gated by `ADMIN_KEY` — set it in
+`.env`; if unset the dashboard and its API are disabled (fail-closed). Features:
+
+- Table of all submissions: source, upload time, type, duration, status
+  (`pending`/`done`/`error`), detected language.
+- Aggregate stats (total / completed / pending / failed).
+- **Open** a completed transcript, **Retry** a failed one, **Delete** a submission
+  (removes the DB row *and* the stored media file).
+
+Requires `DATABASE_URL` (submissions are stored in PostgreSQL).
+
+## Review & Edit (two-panel)
+
+At step 3 the screen splits: a **media player on the left** (audio or video, with
+seek — click any segment timestamp to jump the player there) and the **editable
+transcript on the right**, with `.txt`/`.srt` downloads pinned at the top.
 
 ## Making transcription faster (large files)
 
