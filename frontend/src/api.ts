@@ -47,12 +47,16 @@ const BACKEND = (process.env.NEXT_PUBLIC_FASTAPI_URL || '').replace(/\/+$/, '')
 const JOB_API = `${BACKEND}${API}`
 
 async function detail(res: Response): Promise<string> {
+  // NOTE: res.statusText is ALWAYS empty on HTTP/2 (e.g. Render/Vercel), so fall
+  // back to the numeric status code — otherwise platform errors (502/504/…) would
+  // surface as a blank "Transcription failed" message with no cause shown.
   try {
     const body = await res.json()
-    return body.detail || res.statusText
+    if (body?.detail) return body.detail
   } catch {
-    return res.statusText
+    /* response body was not JSON (e.g. a platform HTML error page) */
   }
+  return res.statusText || `HTTP ${res.status}`
 }
 
 export async function fetchLanguages(): Promise<LanguageOption[]> {
