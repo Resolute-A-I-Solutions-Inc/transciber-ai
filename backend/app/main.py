@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db
-from .config import DEV_ORIGINS, REPO_DIR
+from .config import ALLOWED_ORIGINS, REPO_DIR
 from .routes import admin as admin_router
 from .routes import router
 
@@ -28,7 +28,7 @@ def _startup() -> None:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=DEV_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

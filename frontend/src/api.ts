@@ -38,6 +38,14 @@ export interface LanguageOption {
 
 const API = '/api'
 
+// Heavy transcription endpoints (upload, job polling, media) run on a separate
+// always-on backend (e.g. Railway) and are called DIRECTLY from the browser so
+// large uploads bypass Vercel's ~4.5MB proxy body limit. Set
+// NEXT_PUBLIC_FASTAPI_URL to that backend's origin (CORS must allow this site).
+// Empty => same-origin (local dev where the backend is proxied/served locally).
+const BACKEND = (process.env.NEXT_PUBLIC_FASTAPI_URL || '').replace(/\/+$/, '')
+const JOB_API = `${BACKEND}${API}`
+
 async function detail(res: Response): Promise<string> {
   try {
     const body = await res.json()
@@ -67,16 +75,16 @@ export async function submitTranscription(opts: SubmitOptions): Promise<string> 
   fd.append('language', opts.language)
   fd.append('engine', opts.engine)
 
-  // Submit to FastAPI via rewrite proxy
-  const res = await fetch(`${API}/transcribe`, { method: 'POST', body: fd })
+  // Submit directly to the FastAPI backend (bypasses Vercel's proxy body limit).
+  const res = await fetch(`${JOB_API}/transcribe`, { method: 'POST', body: fd })
   if (!res.ok) throw new Error(await detail(res))
   const body = await res.json()
   return body.job_id as string
 }
 
 export async function getJob(id: string): Promise<Job> {
-  // Poll FastAPI via rewrite proxy
-  const res = await fetch(`${API}/jobs/${id}`)
+  // Poll the FastAPI backend directly.
+  const res = await fetch(`${JOB_API}/jobs/${id}`)
   if (!res.ok) throw new Error(await detail(res))
   return res.json()
 }
@@ -123,7 +131,7 @@ export async function getTranscription(id: string): Promise<OpenedTranscript> {
 
 /** URL of the stored media for a submission (streams with range support). */
 export function mediaUrl(id: string): string {
-  return `${API}/media/${id}`
+  return `${JOB_API}/media/${id}`
 }
 
 // --- Admin API (all calls require the X-Admin-Key header) -------------------

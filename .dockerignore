@@ -1,0 +1,14 @@
+# Keep the build context small — only backend/ + requirements-deploy.txt are needed.
+.git/
+.venv/
+frontend/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mimocode/
+backend/uploads/
+models/
+*.md
+.env
+.env.*

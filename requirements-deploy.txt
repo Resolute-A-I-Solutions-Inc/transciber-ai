@@ -1,0 +1,66 @@
+# Lean runtime deps for the Railway backend image (Dockerfile).
+# Derived from requirements.txt, MINUS the torch/openai-whisper stack:
+#   torch, openai-whisper, tiktoken, numba, llvmlite, sympy, networkx, mpmath
+# Rationale: the deploy uses faster-whisper (CTranslate2, int8 CPU), which does
+# NOT need torch — dropping it keeps the image ~2.5GB smaller and builds faster.
+# openai-whisper (WHISPER_IMPL=openai) is intentionally unavailable on Railway.
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.14.2
+av==18.0.0
+certifi==2026.7.22
+cffi==2.1.0
+charset-normalizer==3.4.9
+click==8.4.2
+colorama==0.4.6
+cryptography==49.0.0
+ctranslate2==4.8.1
+distro==1.9.0
+fastapi==0.139.2
+faster-whisper==1.2.1
+filelock==3.32.0
+flatbuffers==25.12.19
+fsspec==2026.6.0
+google-auth==2.56.2
+google-genai==2.14.0
+h11==0.16.0
+hf-xet==1.5.2
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+huggingface-hub==1.24.0
+idna==3.18
+jinja2==3.1.6
+markupsafe==3.0.3
+more-itertools==11.1.0
+numpy==2.4.6
+onnxruntime==1.27.0
+packaging==26.2
+protobuf==7.35.1
+psycopg==3.3.4
+psycopg-binary==3.3.4
+psycopg-pool==3.3.1
+pyasn1==0.6.4
+pyasn1-modules==0.4.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic-core==2.46.4
+python-dotenv==1.2.2
+python-multipart==0.0.32
+pyyaml==6.0.3
+regex==2026.7.19
+requests==2.34.2
+setuptools==83.0.0
+sniffio==1.3.1
+starlette==1.3.1
+tenacity==9.1.4
+tokenizers==0.23.1
+tqdm==4.69.0
+typing-extensions==4.16.0
+typing-inspection==0.4.2
+tzdata==2026.3
+urllib3==2.7.0
+uvicorn==0.51.0
+watchfiles==1.2.0
+websockets==16.1.1
+yt-dlp==2026.7.4

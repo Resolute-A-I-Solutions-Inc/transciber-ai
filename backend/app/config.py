@@ -70,7 +70,9 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 # When set, transcription results are saved to PostgreSQL and exposed as history.
 # Example: postgresql://user:pass@127.0.0.1:5432/transcriber_ai
 # When empty, the app runs fine with in-memory jobs only (no history).
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_raw_db_url = os.environ.get("DATABASE_URL", "")
+# Strip pgbouncer param that psycopg_pool doesn't understand
+DATABASE_URL = _raw_db_url.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
 
 # --- Uploads ----------------------------------------------------------------
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", BACKEND_DIR / "uploads"))
@@ -82,8 +84,14 @@ MAX_UPLOAD_BYTES = _int_env("MAX_UPLOAD_BYTES", 2 * 1024 ** 3)
 # Chunk size for streaming uploads to disk.
 UPLOAD_CHUNK_BYTES = _int_env("UPLOAD_CHUNK_BYTES", 1024 * 1024)
 
-# CORS origins for the Vite dev server.
+# CORS origins for the local dev frontend.
 DEV_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# Extra allowed browser origins for production (comma-separated), e.g. the
+# Vercel site that uploads directly to this backend. Example:
+#   ALLOWED_ORIGINS=https://transcribe-ai.resoluteaiph.com,https://transcribe-ai.vercel.app
+_extra_origins = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = DEV_ORIGINS + [o.strip() for o in _extra_origins.split(",") if o.strip()]

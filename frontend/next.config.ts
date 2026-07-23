@@ -1,34 +1,12 @@
 import type { NextConfig } from 'next'
 
-const FASTAPI = process.env.FASTAPI_URL || 'http://localhost:8000'
-
+// The heavy transcription endpoints (/api/transcribe, /api/jobs, /api/media) are
+// called directly from the browser against NEXT_PUBLIC_FASTAPI_URL (see src/api.ts),
+// so no proxy rewrites are needed here — that also avoids Vercel's ~4.5MB request
+// body limit on proxied functions. /api/languages, /api/transcriptions and
+// /api/admin are handled by Next.js route handlers.
 const nextConfig: NextConfig = {
   output: 'standalone',
-  rewrites: async () => {
-    // Only add rewrites if FASTAPI_URL is configured (production)
-    // In development, Vite/Next.js dev server handles API routes directly
-    if (process.env.FASTAPI_URL) {
-      return [
-        {
-          source: '/api/transcribe',
-          destination: `${FASTAPI}/api/transcribe`,
-        },
-        {
-          source: '/api/transcribe/:path*',
-          destination: `${FASTAPI}/api/transcribe/:path*`,
-        },
-        {
-          source: '/api/jobs/:path*',
-          destination: `${FASTAPI}/api/jobs/:path*`,
-        },
-        {
-          source: '/api/media/:path*',
-          destination: `${FASTAPI}/api/media/:path*`,
-        },
-      ]
-    }
-    return []
-  },
 }
 
 export default nextConfig

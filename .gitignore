@@ -14,10 +14,12 @@ backend/uploads/
 # Whisper model cache (if kept local)
 models/
 
-# Node / Vite
+# Node / Vite / Next
 node_modules/
 frontend/dist/
 frontend/node_modules/
+frontend/.next/
+*.tsbuildinfo
 
 # OS / editor
 .DS_Store
