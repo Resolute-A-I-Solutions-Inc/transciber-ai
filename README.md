@@ -6,10 +6,11 @@ cost) with **Google Gemini** as an optional cloud engine. It has a drag-and-drop
 UI, a 3-step workflow (Upload → Transcribe → Review & Edit), an editable
 transcript with timestamps, and `.txt` / `.srt` downloads.
 
+- **Frontend:** Next.js (App Router) + Prisma ORM (TypeScript).
 - **Backend:** FastAPI (Python 3.11) with an async job worker — a `POST` starts a
   job and returns immediately; the UI polls for progress, so large files never
   hit an HTTP timeout.
-- **Frontend:** React + Vite (TypeScript).
+- **Database:** PostgreSQL (Supabase-compatible) via Prisma.
 - **Media:** `yt-dlp` fetches URLs (YouTube + direct links); `ffmpeg` normalizes
   everything to 16 kHz mono WAV.
 
@@ -21,7 +22,8 @@ transcript with timestamps, and `.txt` / `.srt` downloads.
 |------|-------|
 | **ffmpeg** (+ ffprobe) | Must be on your `PATH`. Verify: `ffmpeg -version`. |
 | **Python 3.11** | Installed/managed via [`uv`](https://docs.astral.sh/uv/). Whisper/PyTorch have reliable 3.11 wheels; newer Pythons may not. |
-| **Node.js 18+** & npm | For the frontend. |
+| **Node.js 18+** & npm | For the Next.js frontend. |
+| **PostgreSQL** | Supabase or local. Used via Prisma for transcript persistence. |
 
 > This app runs Whisper on **CPU** unless you install a CUDA build of PyTorch.
 > Large files can take a while; choose a smaller `WHISPER_MODEL` if needed.
@@ -41,6 +43,9 @@ uv pip install --python .venv/Scripts/python.exe -r requirements.txt
 
 # 3. Frontend deps
 cd frontend && npm install && cd ..
+
+# 4. Push Prisma schema to your database
+cd frontend && npx prisma db push && cd ..
 ```
 
 ---
@@ -50,24 +55,30 @@ cd frontend && npm install && cd ..
 ### Development (two terminals, hot reload)
 
 ```bash
-# Terminal 1 — backend API on :8000
+# Terminal 1 — FastAPI backend on :8000 (transcription + media)
 cd backend
 ../.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
 
-# Terminal 2 — frontend dev server on :5173 (proxies /api to :8000)
+# Terminal 2 — Next.js frontend on :5173 (UI + Prisma API routes)
 cd frontend
 npm run dev
 ```
 
 Open **http://localhost:5173**.
 
-### Production (single port)
+### Production
 
 ```bash
-# Build the frontend once; FastAPI then serves it from frontend/dist
+# 1. Build the Next.js frontend
 cd frontend && npm run build && cd ..
+
+# 2. Start FastAPI backend (serves media + transcription jobs)
 cd backend
 ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+
+# 3. Start Next.js (serves UI + Prisma-backed API routes)
+cd frontend
+npm start
 ```
 
 Open **http://localhost:8000**.
@@ -89,15 +100,35 @@ Open **http://localhost:8000**.
 | `GEMINI_API_KEY` | *(empty)* | Required only for the Gemini engine. Get one at https://aistudio.google.com/apikey. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model id. |
 | `MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Max upload / download size. |
-| `DATABASE_URL` | *(empty)* | Optional PostgreSQL DSN. When set, transcripts are saved and shown as history; the `transcriptions` table is auto-created on startup. Also required for the admin dashboard. When empty, jobs are in-memory only. |
+| `DATABASE_URL` | *(empty)* | PostgreSQL DSN for Prisma. When set, transcripts are saved and shown as history. |
+| `FASTAPI_URL` | `http://localhost:8000` | URL of the FastAPI backend (transcription jobs + media). |
 | `ADMIN_KEY` | *(empty)* | Credential for `/admin` and the admin API. **Empty = admin disabled (fail-closed).** |
 
 > **Privacy:** With **Whisper**, audio never leaves your machine. With **Gemini**,
-> audio is uploaded to Google for transcription.
+> audio is uploaded to Google for transcription. Database queries go through Prisma
+> to Supabase PostgreSQL.
 
 ---
 
-## API
+## Architecture
+
+```
+Next.js (:5173)                    FastAPI (:8000)
+┌─────────────────────┐            ┌─────────────────────┐
+│  React UI (SSR)     │            │  Whisper / Gemini   │
+│  Prisma API routes  │───────────▶│  ffmpeg / yt-dlp    │
+│  /api/transcriptions│  proxy     │  /api/transcribe    │
+│  /api/admin/*       │  /api/jobs │  /api/jobs/*        │
+│  /api/languages     │  /api/media│  /api/media/*       │
+└─────────┬───────────┘            └─────────────────────┘
+          │
+          ▼
+   PostgreSQL (Supabase)
+```
+
+- **Next.js** handles the UI, Prisma-backed API routes (transcript history, admin, languages), and proxies transcription/media requests to FastAPI.
+- **FastAPI** handles the heavy lifting: Whisper transcription, ffmpeg conversion, yt-dlp downloads, and media serving.
+- **Prisma** manages the database schema and queries via Supabase PostgreSQL.
 
 | Method & path | Description |
 |---------------|-------------|
@@ -171,9 +202,10 @@ by impact:
 The transcribe step reports **real streaming progress** with faster-whisper (segments
 decode incrementally), so the progress bar advances on long files instead of sitting idle.
 
-> **Supabase / hosted Postgres:** persistence works with any PostgreSQL. Point
-> `DATABASE_URL` at your Supabase connection string (append `?sslmode=require`), e.g.
+> **Supabase / hosted Postgres:** Point `DATABASE_URL` at your Supabase connection
+> string (append `?sslmode=require`), e.g.
 > `postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres?sslmode=require`.
+> Then run `npx prisma db push` in the `frontend/` directory to sync the schema.
 
 ## Supported input
 

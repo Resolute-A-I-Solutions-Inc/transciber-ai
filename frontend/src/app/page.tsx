@@ -1,22 +1,24 @@
+'use client'
+
 import { useEffect, useRef, useState } from 'react'
-import Stepper from './components/Stepper'
-import UploadStep, { type UploadPayload } from './components/UploadStep'
-import ProcessingStep from './components/ProcessingStep'
-import ReviewPanel from './components/ReviewPanel'
-import ErrorStep from './components/ErrorStep'
-import History from './components/History'
-import { getJob, getTranscription, submitTranscription, type Job } from './api'
+import Stepper from '@/components/Stepper'
+import UploadStep, { type UploadPayload } from '@/components/UploadStep'
+import ProcessingStep from '@/components/ProcessingStep'
+import ReviewPanel from '@/components/ReviewPanel'
+import ErrorStep from '@/components/ErrorStep'
+import History from '@/components/History'
+import { getJob, getTranscription, submitTranscription, type Job } from '@/api'
 
 type Phase = 'upload' | 'processing' | 'review' | 'error'
 
-export default function App() {
+export default function HomePage() {
   const [phase, setPhase] = useState<Phase>('upload')
   const [job, setJob] = useState<Job | null>(null)
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [historyKey, setHistoryKey] = useState(0)
-  const pollRef = useRef<number | undefined>(undefined)
-  const timerRef = useRef<number | undefined>(undefined)
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   function stopTimers() {
     clearInterval(pollRef.current)
@@ -39,8 +41,8 @@ export default function App() {
     setPhase('processing')
     try {
       const id = await submitTranscription(payload)
-      timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000)
-      pollRef.current = window.setInterval(async () => {
+      timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000)
+      pollRef.current = setInterval(async () => {
         try {
           const j = await getJob(id)
           setJob(j)
@@ -70,8 +72,10 @@ export default function App() {
     try {
       const { result, contentType } = await getTranscription(id)
       setError('')
-      setJob({ id, status: 'done', phase: 'Done', progress: 1, result, error: null,
-               content_type: contentType })
+      setJob({
+        id, status: 'done', phase: 'Done', progress: 1, result, error: null,
+        content_type: contentType,
+      })
       setPhase('review')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -95,6 +99,16 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* Login Button */}
+      <a href="/admin" className="login-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+          <polyline points="10 17 15 12 10 7" />
+          <line x1="15" y1="12" x2="3" y2="12" />
+        </svg>
+        Sign In
+      </a>
+
       <header className="hero">
         <h1>transcriber<span>.ai</span></h1>
         <p>

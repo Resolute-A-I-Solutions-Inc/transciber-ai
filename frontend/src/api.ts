@@ -67,6 +67,7 @@ export async function submitTranscription(opts: SubmitOptions): Promise<string> 
   fd.append('language', opts.language)
   fd.append('engine', opts.engine)
 
+  // Submit to FastAPI via rewrite proxy
   const res = await fetch(`${API}/transcribe`, { method: 'POST', body: fd })
   if (!res.ok) throw new Error(await detail(res))
   const body = await res.json()
@@ -74,6 +75,7 @@ export async function submitTranscription(opts: SubmitOptions): Promise<string> 
 }
 
 export async function getJob(id: string): Promise<Job> {
+  // Poll FastAPI via rewrite proxy
   const res = await fetch(`${API}/jobs/${id}`)
   if (!res.ok) throw new Error(await detail(res))
   return res.json()
@@ -91,6 +93,7 @@ export interface TranscriptionSummary {
 }
 
 export async function listTranscriptions(): Promise<TranscriptionSummary[]> {
+  // Read from Next.js API route (Prisma)
   const res = await fetch(`${API}/transcriptions`)
   if (!res.ok) throw new Error(await detail(res))
   return res.json()
@@ -102,6 +105,7 @@ export interface OpenedTranscript {
 }
 
 export async function getTranscription(id: string): Promise<OpenedTranscript> {
+  // Read from Next.js API route (Prisma)
   const res = await fetch(`${API}/transcriptions/${id}`)
   if (!res.ok) throw new Error(await detail(res))
   const r = await res.json()

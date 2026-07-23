@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Transcription {
+  id                String   @id
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  sourceType        String?  @map("source_type")
+  sourceName        String?  @map("source_name")
+  sourceUrl         String?  @map("source_url")
+  engine            String?
+  language          String?
+  status            String
+  languageDetected  String?  @map("language_detected")
+  fullText          String?  @map("full_text") @db.Text
+  segments          Json?
+  srt               String?  @db.Text
+  vtt               String?  @db.Text
+  error             String?  @db.Text
+  mediaPath         String?  @map("media_path")
+  contentType       String?  @map("content_type")
+  duration          Float?
+
+  @@map("transcriptions")
+  @@index([createdAt(sort: Desc)])
+}
