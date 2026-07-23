@@ -1,0 +1,37 @@
+# Render Blueprint for the transcription backend (FastAPI + faster-whisper).
+# Create via Render dashboard: New + → Blueprint → pick this repo.
+# Builds the repo-root Dockerfile. Requires a PAID instance (see `plan`):
+# the model needs ~1-2GB RAM and persistent disks are paid-only.
+services:
+  - type: web
+    name: transcriber-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # 'standard' = 2GB RAM (needed for WHISPER_MODEL=turbo). Drop to 'starter'
+    # (512MB) only if you also set WHISPER_MODEL=base/small to fit.
+    plan: standard
+    healthCheckPath: /api/health
+    autoDeploy: true
+    # Persistent disk so uploaded media (playback/retry) and the cached model
+    # survive restarts/redeploys. Mounted at /data (matches UPLOAD_DIR/HF_HOME).
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      # WHISPER_IMPL=faster, WHISPER_DEVICE=cpu, UPLOAD_DIR=/data/uploads are
+      # already baked into the Dockerfile.
+      - key: WHISPER_MODEL
+        value: small        # good accuracy, fits comfortably; bump to 'turbo' on 'standard'
+      - key: HF_HOME
+        value: /data/models # cache the model on the disk (no re-download on restart)
+      - key: ALLOWED_ORIGINS
+        value: https://transcribe-ai.resoluteaiph.com
+      # Secrets — set these in the Render dashboard (sync:false = not in git):
+      - key: ADMIN_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
